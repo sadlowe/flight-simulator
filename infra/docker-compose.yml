@@ -1,0 +1,77 @@
+services:
+  kafka:
+    image: apache/kafka:4.4.0
+    container_name: kafka-container
+    ports:
+      - "9092:9092"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: kafka-ui-container
+    ports:
+      - "8083:8083"
+    depends_on:
+      - kafka
+
+  flight-simulator:
+    container_name: flight-simulator
+    depends_on:
+      db:
+        condition: service_started
+    build:
+      context: ..
+      dockerfile: flight-simulator/Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/flight-system-db
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MANAGEMENT_DATADOG_METRICS_EXPORT_ENABLED: "false"
+    ports:
+      - "8080:8080"
+
+  flight-tracker:
+    container_name: flight-tracker-container
+    depends_on:
+      db:
+        condition: service_started
+    build:
+      context: ..
+      dockerfile: flight-tracker/Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/flight-system-db
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8081:8081"
+
+  notifier:
+    container_name: notifier-container
+    depends_on:
+      kafka:
+        condition: service_started
+    build:
+      context: ..
+      dockerfile: notifier/Dockerfile
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      -  "8082:8082"
+
+  db:
+    image: postgres:17-alpine
+    restart: always
+    container_name: db-container
+    shm_size: 128mb
+    environment:
+      POSTGRES_DB: flight-system-db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
